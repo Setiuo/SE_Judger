@@ -3,7 +3,7 @@
 
 #define PATHLEN 200
 
-//线程传递的结构体
+//线程传递参数结构体
 struct JudgeDate
 {
 	//运行ID
@@ -118,10 +118,10 @@ private:
 	//取得最终评测结果
 	void GetResult();
 
-	//评测线程
+	//评测线程调用函数
 	static DWORD WINAPI JudgeTest(LPVOID lpParamter);
 
-	//结果评测
+	//对输出文件进行评测
 	static bool AcceptedTest(const char* program, const char* tester);
 	static bool PresentationErrorTest(const char* program, const char* tester);
 	static bool OutputLimitExceededTest(const char* program, const char* tester);
