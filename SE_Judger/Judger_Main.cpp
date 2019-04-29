@@ -6,7 +6,7 @@ int main()
 {
 	funJudger_t *Judger = new funJudger_t;
 
-	Judger->SetNumofThread(5);
+	Judger->SetNumofThread(1);
 
 	int allTest[100];
 	for (int i = 1; i <= 35; i++)
@@ -15,11 +15,11 @@ int main()
 	}
 
 	Judger->SetRunID(1);
-	Judger->SetLanguage("Python");
+	Judger->SetLanguage("Java");
 
 	if (Judger->Compile())
 	{
-		Judger->SetTestNum(10);
+		Judger->SetTestNum(5);
 		Judger->SetAllTestNum(&allTest[0]);
 		Judger->SetProblemNum(1000);
 		Judger->SetTimeLimit(1000);

@@ -24,7 +24,7 @@ struct StatusData
 	int exitCode;
 
 };
-static StatusData testStatus[100];
+static StatusData testStatus[110];
 
 //测试点信息
 JudgeDate Test[110];
@@ -235,6 +235,8 @@ void funJudger_t::DeleteTestFile(int RunID)
 
 DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 {
+	SetErrorMode(SEM_NOGPFAULTERRORBOX);
+
 	JudgeDate *data = (JudgeDate *)lpParamter;
 
 	char InputPath[PATHLEN];
@@ -265,9 +267,9 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	si.hStdError =	CreateFile((LPCSTR)ErrorPath,	GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	
 	//DWORD createFlag = CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB;
-	DWORD createFlag = HIGH_PRIORITY_CLASS | CREATE_NO_WINDOW;
+	//DWORD createFlag = HIGH_PRIORITY_CLASS | CREATE_NO_WINDOW;
 
-	if (!CreateProcess(NULL, ProgramPath, NULL, &sa, TRUE, createFlag, NULL, NULL, &si, &pi))
+	if (!CreateProcess(NULL, ProgramPath, NULL, &sa, TRUE, HIGH_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
 	{
 		printf(" Test%2d: CreateProcess失败:0x%x\n", data->testNum, GetLastError());
 
@@ -279,7 +281,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		return 0;
 	}
 	
-	bool memoryLimit = false;
+	bool IsMemoryLimit = false;
 
 	PROCESS_MEMORY_COUNTERS_EX info;
 	ZeroMemory(&info, sizeof(info));
@@ -288,12 +290,11 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	GetProcessMemoryInfo(pi.hProcess, (PROCESS_MEMORY_COUNTERS*)&info, sizeof(info));
 
 	int maxMemory = max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
-
 	bool IstimeLimit = true;
 
 	if (maxMemory > data->memoryLimit)
 	{
-		memoryLimit = true;
+		IsMemoryLimit = true;
 		IstimeLimit = false;
 	}
 
@@ -308,8 +309,9 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	int runTime = 0;
 	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum));
 
-	do
+	while (runTime <= (data->timeLimit + extraTime))
 	{
+		//程序正常结束，先设置为未超时跳出循环
 		if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0)
 		{
 			IstimeLimit = false;
@@ -323,18 +325,28 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 		if (maxMemory > data->memoryLimit)
 		{
-			memoryLimit = true;
+			IsMemoryLimit = true;
 		}
 
-		if (!IstimeLimit || memoryLimit)
+		if (!IstimeLimit || IsMemoryLimit)
 		{
+			printf("PeakWorkingSetSize          %d\n", info.PeakWorkingSetSize / 1024);
+			printf("PeakPagefileUsage          %d\n", info.PeakPagefileUsage / 1024);
+			printf("WorkingSetSize             %d\n", info.WorkingSetSize / 1024);
+			printf("QuotaPeakPagedPoolUsage    %d\n", info.QuotaPeakPagedPoolUsage / 1024);
+			printf("QuotaNonPagedPoolUsage     %d\n", info.QuotaNonPagedPoolUsage / 1024);
+			printf("QuotaPagedPoolUsage        %d\n", info.QuotaPagedPoolUsage / 1024);
+			printf("QuotaPeakNonPagedPoolUsage %d\n", info.QuotaPeakNonPagedPoolUsage / 1024);
+			printf("PagefileUsage              %d\n", info.PagefileUsage / 1024);
+			printf("PrivateUsage               %d\n", info.PrivateUsage / 1024);
 			IsBreak = true;
 
-			if (memoryLimit)
+			if (IsMemoryLimit)
 			{
 				//超内存后设置为未超时，获取进程使用时间
 				IstimeLimit = false;
 			}
+
 			if (!IstimeLimit)
 			{
 				FILETIME creationTime, exitTime, kernelTime, userTime;
@@ -361,8 +373,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 			break;
 		}
-
-	} while (runTime <= (data->timeLimit + extraTime));
+	}
 
 	if (!IstimeLimit && timeUsed > data->timeLimit)
 	{
@@ -381,7 +392,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		CloseHandle(pi.hThread);
 	}
 
-	if (memoryLimit)
+	if (IsMemoryLimit)
 	{
 		testStatus[data->testNum].status = MemoryLimitExceeded;
 	}
@@ -458,7 +469,7 @@ int funJudger_t::Run()
 		//检查是否所有测试点都运行完毕
 		for (int i = startTest; i <= endTest; i++)
 		{
-			if (testStatus[i].status == 0)
+			if (testStatus[allTestNum[i]].status == 0)
 			{
 				judgeOver = false;
 				break;
@@ -480,7 +491,7 @@ int funJudger_t::Run()
 			printf("测试点 结果      时间            Judge时间        内存               退出码\n");
 			GetResult();
 
-			DeleteTestFile(runID);
+			//DeleteTestFile(runID);
 
 			printf("\nJudge Over, %s  usetime:%4dms  usememory:%5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
 			break;
@@ -520,49 +531,51 @@ void funJudger_t::GetResult()
 	//8.Accepted
 	for (int i = 1; i <= TestNum; i++)
 	{
-		LastTimeUsed = max(LastTimeUsed, testStatus[i].timeUsed);
-		LastMemoryUsed = max(LastMemoryUsed, testStatus[i].memoryUsed);
+		int iTestNum = allTestNum[i];
 
-		if (testStatus[i].status == SystemError)
+		LastTimeUsed = max(LastTimeUsed, testStatus[iTestNum].timeUsed);
+		LastMemoryUsed = max(LastMemoryUsed, testStatus[iTestNum].memoryUsed);
+
+		if (testStatus[iTestNum].status == SystemError)
 		{
 			LastStatus = SystemError;
 		}
-		else if (testStatus[i].status == RuntimeError)
+		else if (testStatus[iTestNum].status == RuntimeError)
 		{
 			if (LastStatus != SystemError)
 			{
 				LastStatus = RuntimeError;
 			}
 		}
-		else if (testStatus[i].status == TimeLimitExceeded || testStatus[i].status == MemoryLimitExceeded)
+		else if (testStatus[iTestNum].status == TimeLimitExceeded || testStatus[iTestNum].status == MemoryLimitExceeded)
 		{
 			if (LastStatus != RuntimeError && LastStatus != SystemError)
 			{
-				LastStatus = testStatus[i].status;
+				LastStatus = testStatus[iTestNum].status;
 			}
 		}
-		else if (testStatus[i].status == WrongAnswer)
+		else if (testStatus[iTestNum].status == WrongAnswer)
 		{
 			if (LastStatus == 0 || LastStatus == Accepted || LastStatus == PresentationError || LastStatus == OutputLimitExceeded)
 			{
 				LastStatus = WrongAnswer;
 			}
 		}
-		else if (testStatus[i].status == PresentationError)
+		else if (testStatus[iTestNum].status == PresentationError)
 		{
 			if (LastStatus == 0)
 			{
 				LastStatus = PresentationError;
 			}
 		}
-		else if (testStatus[i].status == OutputLimitExceeded)
+		else if (testStatus[iTestNum].status == OutputLimitExceeded)
 		{
 			if (LastStatus == 0 || LastStatus == PresentationError)
 			{
 				LastStatus = OutputLimitExceeded;
 			}
 		}
-		else if (testStatus[i].status == Accepted)
+		else if (testStatus[iTestNum].status == Accepted)
 		{
 			if (LastStatus == 0)
 			{
@@ -570,7 +583,7 @@ void funJudger_t::GetResult()
 			}
 		}
 
-		printf("##%2d : %s  usetime:%4dms  runttime:%4dms  usememory:%5dkb  ExitCode:%d\n", i, ProgramStateStr[testStatus[i].status], testStatus[i].timeUsed, testStatus[i].runTime, testStatus[i].memoryUsed, testStatus[i].exitCode);
+		printf("##%2d : %s  usetime:%4dms  runttime:%4dms  usememory:%5dkb  ExitCode:0x%x\n", iTestNum, ProgramStateStr[testStatus[iTestNum].status], testStatus[iTestNum].timeUsed, testStatus[iTestNum].runTime, testStatus[iTestNum].memoryUsed, testStatus[iTestNum].exitCode);
 	}
 }
 
