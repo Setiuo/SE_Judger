@@ -6,16 +6,17 @@ int main()
 {
 	funJudger_t *Judger = new funJudger_t;
 
-	Judger->SetNumofThread(1);
+	Judger->SetNumofThread(5);
 
 	int allTest[100];
-	for (int i = 1; i <= 35; i++)
-	{
-		allTest[i] = i;
-	}
+	allTest[1] = 1;
+	allTest[2] = 2;
+	allTest[3] = 6;
+	allTest[4] = 7;
+	allTest[5] = 8;
 
-	Judger->SetRunID(1);
-	Judger->SetLanguage("Java");
+	Judger->SetRunID(2);
+	Judger->SetLanguage("C++");
 
 	if (Judger->Compile())
 	{

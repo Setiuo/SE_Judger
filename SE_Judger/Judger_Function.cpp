@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "Judger_Function.h"
+#include "Encode.h"
 
 using namespace std;
 
@@ -136,6 +137,7 @@ bool funJudger_t::Compile()
 		{
 			status = false;
 			printf("±àÒë·¢Éú´íÎó\n");
+			PrintErrorLog(runID);
 		}
 		else
 		{
@@ -222,6 +224,26 @@ void funJudger_t::SetProblemNum(int num)
 	problemNum = num;
 }
 
+void funJudger_t::PrintErrorLog(int RunID)
+{
+	char PutPath[PATHLEN];
+	sprintf_s(PutPath, "./log/Error_%d.log", RunID);
+
+	ifstream is(PutPath);
+
+	char buf[1000];
+
+	while (is.getline(buf, 1000))
+	{
+		wchar_t *wBuf = UTF8ToUnicode(buf);
+		char *AnsiBuf = UnicodeToANSI(wBuf);
+
+		printf("%s\n", AnsiBuf);
+	}
+
+	is.close();
+}
+
 void funJudger_t::DeleteTestFile(int RunID)
 {
 	char Path[PATHLEN];
@@ -289,7 +311,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 	GetProcessMemoryInfo(pi.hProcess, (PROCESS_MEMORY_COUNTERS*)&info, sizeof(info));
 
-	int maxMemory = max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
+	int maxMemory = (int)max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
 	bool IstimeLimit = true;
 
 	if (maxMemory > data->memoryLimit)
@@ -307,7 +329,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	DWORD exitCode = 0;
 
 	int runTime = 0;
-	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum));
+	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + 4000;
 
 	while (runTime <= (data->timeLimit + extraTime))
 	{
@@ -321,7 +343,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		runTime = (int)(stop - start);
 
 		GetProcessMemoryInfo(pi.hProcess, (PROCESS_MEMORY_COUNTERS*)&info, sizeof(info));
-		maxMemory = max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
+		maxMemory = (int)max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
 
 		if (maxMemory > data->memoryLimit)
 		{
@@ -330,15 +352,15 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 		if (!IstimeLimit || IsMemoryLimit)
 		{
-			printf("PeakWorkingSetSize          %d\n", info.PeakWorkingSetSize / 1024);
-			printf("PeakPagefileUsage          %d\n", info.PeakPagefileUsage / 1024);
-			printf("WorkingSetSize             %d\n", info.WorkingSetSize / 1024);
-			printf("QuotaPeakPagedPoolUsage    %d\n", info.QuotaPeakPagedPoolUsage / 1024);
-			printf("QuotaNonPagedPoolUsage     %d\n", info.QuotaNonPagedPoolUsage / 1024);
-			printf("QuotaPagedPoolUsage        %d\n", info.QuotaPagedPoolUsage / 1024);
-			printf("QuotaPeakNonPagedPoolUsage %d\n", info.QuotaPeakNonPagedPoolUsage / 1024);
-			printf("PagefileUsage              %d\n", info.PagefileUsage / 1024);
-			printf("PrivateUsage               %d\n", info.PrivateUsage / 1024);
+			/*printf("PeakWorkingSetSize          %I64d\n", info.PeakWorkingSetSize / 1024);
+			printf("PeakPagefileUsage          %I64d\n", info.PeakPagefileUsage / 1024);
+			printf("WorkingSetSize             %I64d\n", info.WorkingSetSize / 1024);
+			printf("QuotaPeakPagedPoolUsage    %I64d\n", info.QuotaPeakPagedPoolUsage / 1024);
+			printf("QuotaNonPagedPoolUsage     %I64d\n", info.QuotaNonPagedPoolUsage / 1024);
+			printf("QuotaPagedPoolUsage        %I64d\n", info.QuotaPagedPoolUsage / 1024);
+			printf("QuotaPeakNonPagedPoolUsage %I64d\n", info.QuotaPeakNonPagedPoolUsage / 1024);
+			printf("PagefileUsage              %I64d\n", info.PagefileUsage / 1024);
+			printf("PrivateUsage               %I64d\n", info.PrivateUsage / 1024);*/
 			IsBreak = true;
 
 			if (IsMemoryLimit)
@@ -373,6 +395,8 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 			break;
 		}
+
+		Sleep(10);
 	}
 
 	if (!IstimeLimit && timeUsed > data->timeLimit)

@@ -117,6 +117,8 @@ private:
 	void CreateTestThread(int start, int end);
 	//取得最终评测结果
 	void GetResult();
+	//输出编译错误信息
+	void PrintErrorLog(int RunID);
 
 	//评测线程调用函数
 	static DWORD WINAPI JudgeTest(LPVOID lpParamter);

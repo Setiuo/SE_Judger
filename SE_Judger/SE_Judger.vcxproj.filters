@@ -21,9 +21,21 @@
     <ClCompile Include="Judger_Function.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="MySql.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="Encode.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Judger_Function.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="MySql.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Encode.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
