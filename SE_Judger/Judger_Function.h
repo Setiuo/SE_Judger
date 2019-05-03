@@ -71,18 +71,18 @@ private:
 	int problemNum;
 	//测试点数量
 	int testNumber;
-	//使用语言
-	int language;
 	//时间限制
 	int timeLimit;
 	//内存限制
 	int memoryLimit;
-	//每个测试点号
+	//每个测试点号【数组下标对应的测试点号】
 	int *allTestNum;
 
-	//结果
+	//结果：最终评测状态
 	int LastStatus;
+	//结果：最终使用时间
 	int LastTimeUsed;
+	//结果：最终使用内存
 	int LastMemoryUsed;
 
 public:
@@ -92,6 +92,8 @@ public:
 public:
 	//设置最大线程数
 	void SetNumofThread(int num);
+	//设置超时重测次数
+	void SetNumofTimeLimit(int num);
 
 	//设置运行ID
 	void SetRunID(int num);
@@ -115,8 +117,11 @@ public:
 private:
 	//创建评测线程
 	void CreateTestThread(int start, int end);
+	void CreateTestThread(int num);
+
 	//取得最终评测结果
 	void GetResult();
+
 	//输出编译错误信息
 	void PrintErrorLog(int RunID);
 

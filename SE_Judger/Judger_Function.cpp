@@ -15,7 +15,7 @@
 
 using namespace std;
 
-//每个测试点的状态信息
+//每个测试点的评测状态信息
 struct StatusData
 {
 	int status;
@@ -27,14 +27,20 @@ struct StatusData
 };
 static StatusData testStatus[110];
 
-//测试点信息
+//测试点信息，用于传递线程信息
 JudgeDate Test[110];
+
 //最多线程数
 int ThreadNum = 1;
+
+//超时重测次数
+int JudgeAgainNum = 1;
+
 //测试点数量
 int TestNum = 1;
-//程序语言
-int Language;
+
+//使用语言
+static int language;
 
 //代码路径
 const char *g_CodePath[] = 
@@ -60,11 +66,18 @@ const char *g_runCommand[] =
 
 funJudger_t::funJudger_t()
 {
+	//初始化结构体数据
 	for (int i = 0; i < 100; i++)
 	{
 		testStatus[i].memoryUsed = 0;
 		testStatus[i].timeUsed = 0;
 		testStatus[i].status = 0;
+
+		Test[i].memoryLimit = 0;
+		Test[i].timeLimit = 0;
+		Test[i].runID = 0;
+		Test[i].testNum = 0;
+		Test[i].problemNum = 0;
 	}
 
 	LastStatus = 0;
@@ -79,8 +92,6 @@ funJudger_t::funJudger_t()
 	language = SE_CPlusPlus;
 	timeLimit = 1000;
 	memoryLimit = 65536;
-
-	Language = SE_CPlusPlus;
 }
 
 funJudger_t::~funJudger_t()
@@ -163,22 +174,18 @@ void funJudger_t::SetLanguage(const char *Name)
 {
 	if (!strcmp(Name, "Java"))
 	{
-		Language = SE_Java;
 		language = SE_Java;
 	}
 	else if (!strcmp(Name, "Python"))
 	{
-		Language = SE_Python;
 		language = SE_Python;
 	}
 	else if (!strcmp(Name, "Gcc"))
 	{
-		Language = SE_C;
 		language = SE_C;
 	}
 	else
 	{
-		Language = SE_CPlusPlus;
 		language = SE_CPlusPlus;
 	}
 }
@@ -189,6 +196,11 @@ void funJudger_t::SetNumofThread(int num)
 	ThreadNum = num;
 }
 
+void funJudger_t::SetNumofTimeLimit(int num)
+{
+	printf("设置超时重测次数：%d\n", num);
+	JudgeAgainNum = num;
+}
 void funJudger_t::SetRunID(int num)
 {
 	printf("设置运行ID：%d\n", num);
@@ -271,7 +283,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	sprintf_s(ErrorPath, "./log/Error_%d.log", data->runID);
 
 	char ProgramPath[PATHLEN];
-	sprintf_s(ProgramPath, g_runCommand[Language], data->runID);
+	sprintf_s(ProgramPath, g_runCommand[language], data->runID);
 
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -329,9 +341,9 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	DWORD exitCode = 0;
 
 	int runTime = 0;
-	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + 4000;
+	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + data->timeLimit * (4 + ThreadNum);
 
-	while (runTime <= (data->timeLimit + extraTime))
+	while (runTime <= extraTime)
 	{
 		//程序正常结束，先设置为未超时跳出循环
 		if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0)
@@ -486,17 +498,35 @@ int funJudger_t::Run()
 	printf("开始评测%d - %d测试点\n", startTest, endTest);
 	CreateTestThread(startTest, endTest);
 
+	int timeLimitJudgeAgain[100];
+	memset(timeLimitJudgeAgain, 0, sizeof timeLimitJudgeAgain);
+
 	while (1)
 	{
 		bool judgeOver = true;
-
+		
 		//检查是否所有测试点都运行完毕
 		for (int i = startTest; i <= endTest; i++)
 		{
-			if (testStatus[allTestNum[i]].status == 0)
+			int iTestNum = allTestNum[i];
+
+			if (testStatus[iTestNum].status == 0)
 			{
 				judgeOver = false;
 				break;
+			}
+			else if (testStatus[iTestNum].status == TimeLimitExceeded)
+			{
+				if (timeLimitJudgeAgain[iTestNum] < JudgeAgainNum)
+				{
+					timeLimitJudgeAgain[iTestNum]++;
+					printf("@超时重测[%d] ： 测试点%d\n", timeLimitJudgeAgain[iTestNum], iTestNum);
+
+					testStatus[iTestNum].status = 0;
+					CreateTestThread(i);
+					judgeOver = false;
+					break;
+				}
 			}
 		}
 
@@ -512,18 +542,19 @@ int funJudger_t::Run()
 				continue;
 			}
 
-			printf("测试点 结果      时间            Judge时间        内存               退出码\n");
+			//printf("测试点 结果      时间            Judge时间        内存               退出码\n");
+			printf("评测完成！\n");
 			GetResult();
 
 			//DeleteTestFile(runID);
 
-			printf("\nJudge Over, %s  usetime:%4dms  usememory:%5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
+			printf("Judge Over, %s  usetime:%4dms  usememory:%5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
 			break;
 		}
 	}
 
 	proTimeUsed = (int)(clock() - start);
-	printf("评测总耗时：%dms\n", proTimeUsed);
+	printf("评测总耗时：%dms\n\n", proTimeUsed);
 	return 1;
 }
 
@@ -540,6 +571,17 @@ void funJudger_t::CreateTestThread(int start, int end)
 
 		CreateThread(NULL, 0, JudgeTest, &Test[i], 0, NULL);
 	}
+}
+
+void funJudger_t::CreateTestThread(int num)
+{
+	Test[num].runID = runID;
+	Test[num].problemNum = problemNum;
+	Test[num].testNum = allTestNum[num];
+	Test[num].memoryLimit = memoryLimit;
+	Test[num].timeLimit = timeLimit;
+
+	CreateThread(NULL, 0, JudgeTest, &Test[num], 0, NULL);
 }
 
 void funJudger_t::GetResult()
