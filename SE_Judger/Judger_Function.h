@@ -16,6 +16,7 @@ struct JudgeDate
 	int memoryLimit;
 	//最大时间使用限制
 	int timeLimit;
+	bool resurvey;
 };
 
 enum Language
@@ -109,6 +110,11 @@ public:
 	void SetTimeLimit(int num);
 	//设置程序语言
 	void SetLanguage(const char *Name);
+	//设置评测答案时删除首末空格和换行符
+	void SetRemoveBlank(bool Remove);
+	//重置评测结果
+	void Reset();
+
 	//删除测试输出数据
 	void DeleteTestFile(int RunID);
 
@@ -117,7 +123,8 @@ public:
 private:
 	//创建评测线程
 	void CreateTestThread(int start, int end);
-	void CreateTestThread(int num);
+	//创建评测线程，一般用于超时重测
+	void CreateTestThread(int num, bool resurvey = false);
 
 	//取得最终评测结果
 	void GetResult();

@@ -42,6 +42,9 @@ int TestNum = 1;
 //使用语言
 static int language;
 
+//是否删除答案首末空格
+bool isRemoveBlank;
+
 //代码路径
 const char *g_CodePath[] = 
 {"./temporary/%d/Code.c", 
@@ -170,6 +173,26 @@ bool funJudger_t::Compile()
 	return status;
 }
 
+void funJudger_t::Reset()
+{
+	for (int i = 0; i < 100; i++)
+	{
+		testStatus[i].memoryUsed = 0;
+		testStatus[i].timeUsed = 0;
+		testStatus[i].status = 0;
+
+		Test[i].memoryLimit = 0;
+		Test[i].timeLimit = 0;
+		Test[i].runID = 0;
+		Test[i].testNum = 0;
+		Test[i].problemNum = 0;
+	}
+
+	LastStatus = 0;
+	LastTimeUsed = 0;
+	LastMemoryUsed = 0;
+}
+
 void funJudger_t::SetLanguage(const char *Name)
 {
 	if (!strcmp(Name, "Java"))
@@ -234,6 +257,12 @@ void funJudger_t::SetProblemNum(int num)
 {
 	printf("设置题号：%d\n", num);
 	problemNum = num;
+}
+
+void funJudger_t::SetRemoveBlank(bool Remove)
+{
+	printf("设置评测时删除数据首末空格和换行符\n");
+	isRemoveBlank = Remove;
 }
 
 void funJudger_t::PrintErrorLog(int RunID)
@@ -341,7 +370,10 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	DWORD exitCode = 0;
 
 	int runTime = 0;
-	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + data->timeLimit * (4 + ThreadNum);
+	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + data->timeLimit;
+
+	if(data->resurvey)
+		extraTime += data->timeLimit * ThreadNum;
 
 	while (runTime <= extraTime)
 	{
@@ -515,18 +547,17 @@ int funJudger_t::Run()
 				judgeOver = false;
 				break;
 			}
-			else if (testStatus[iTestNum].status == TimeLimitExceeded)
+			else if (testStatus[iTestNum].status == TimeLimitExceeded && timeLimitJudgeAgain[iTestNum] < JudgeAgainNum)
 			{
-				if (timeLimitJudgeAgain[iTestNum] < JudgeAgainNum)
-				{
-					timeLimitJudgeAgain[iTestNum]++;
-					printf("@超时重测[%d] ： 测试点%d\n", timeLimitJudgeAgain[iTestNum], iTestNum);
+				timeLimitJudgeAgain[iTestNum]++;
+				printf("@超时重测[%d] ： 测试点%d\n", timeLimitJudgeAgain[iTestNum], iTestNum);
 
-					testStatus[iTestNum].status = 0;
-					CreateTestThread(i);
-					judgeOver = false;
-					break;
-				}
+				testStatus[iTestNum].status = 0;
+				CreateTestThread(i, true);
+				judgeOver = false;
+
+				//break目的是等待该线程执行完成，去除多线程对评测的影响
+				break;
 			}
 		}
 
@@ -568,18 +599,20 @@ void funJudger_t::CreateTestThread(int start, int end)
 		Test[i].testNum = allTestNum[i];
 		Test[i].memoryLimit = memoryLimit;
 		Test[i].timeLimit = timeLimit;
+		Test[i].resurvey = false;
 
 		CreateThread(NULL, 0, JudgeTest, &Test[i], 0, NULL);
 	}
 }
 
-void funJudger_t::CreateTestThread(int num)
+void funJudger_t::CreateTestThread(int num, bool resurvey)
 {
 	Test[num].runID = runID;
 	Test[num].problemNum = problemNum;
 	Test[num].testNum = allTestNum[num];
 	Test[num].memoryLimit = memoryLimit;
 	Test[num].timeLimit = timeLimit;
+	Test[num].resurvey = resurvey;
 
 	CreateThread(NULL, 0, JudgeTest, &Test[num], 0, NULL);
 }
@@ -653,6 +686,15 @@ void funJudger_t::GetResult()
 	}
 }
 
+void RemoveStringBlank(string &Str)
+{
+	if (!Str.empty())
+	{
+		Str.erase(0, Str.find_first_not_of(" "));
+		Str.erase(Str.find_last_not_of(" ") + 1);
+	}
+}
+
 //AC结果评测
 bool funJudger_t::AcceptedTest(const char* program, const char* tester)
 {
@@ -661,25 +703,38 @@ bool funJudger_t::AcceptedTest(const char* program, const char* tester)
 
 	bool Res = true;
 
-	char buf1[1000];
-	char buf2[1000];
+	string buf1;
+	string buf2;
 
-	while (is2.getline(buf2, 1000))
+	while (getline(is2, buf2))
 	{
-		if (!is1.getline(buf1, 1000))
+		if (isRemoveBlank)
+		{
+			RemoveStringBlank(buf2);
+
+			if (buf2 == "")
+				continue;
+		}
+
+		if (!getline(is1, buf1))
 		{
 			Res = false;
 			break;
 		}
 
-		if (strcmp(buf1, buf2) != 0)
+		if (isRemoveBlank)
+		{
+			RemoveStringBlank(buf1);
+		}
+
+		if (buf1 != buf2)
 		{
 			Res = false;
 			break;
 		}
 	}
 
-	if (is1.getline(buf1, 1000))
+	if (getline(is1, buf1))
 	{
 		Res = false;
 	}
@@ -696,8 +751,8 @@ bool funJudger_t::PresentationErrorTest(const char* program, const char* tester)
 	ifstream is1(program);
 	ifstream is2(tester);
 
-	char buf1[1000];
-	char buf2[1000];
+	string buf1;
+	string buf2;
 
 	bool Res = true;
 
@@ -709,7 +764,7 @@ bool funJudger_t::PresentationErrorTest(const char* program, const char* tester)
 			break;
 		}
 
-		if (strcmp(buf1, buf2) != 0)
+		if (buf1 != buf2)
 		{
 			Res = false;
 			break;
