@@ -110,7 +110,7 @@ public:
 	void SetTimeLimit(int num);
 	//设置程序语言
 	void SetLanguage(const char *Name);
-	//设置评测答案时删除首末空格和换行符
+	//设置评测数据时忽略首末空格和换行符
 	void SetRemoveBlank(bool Remove);
 	//重置评测结果
 	void Reset();

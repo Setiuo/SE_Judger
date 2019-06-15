@@ -4,6 +4,7 @@
 
 int main()
 {
+	printf("已启动  代码评测机\n");
 	funJudger_t *Judger = new funJudger_t;
 
 	Judger->SetNumofThread(5);
@@ -15,11 +16,6 @@ int main()
 	{
 		allTest[i] = i;
 	}
-	/*allTest[1] = 1;
-	allTest[2] = 2;
-	allTest[3] = 6;
-	allTest[4] = 7;
-	allTest[5] = 8;*/
 
 	Judger->SetRunID(2);
 	Judger->SetLanguage("C++");
@@ -34,12 +30,16 @@ int main()
 	}
 
 	Judger->Reset();
-
+	allTest[1] = 1;
+	allTest[2] = 2;
+	allTest[3] = 6;
+	allTest[4] = 7;
+	allTest[5] = 8;
 	Judger->SetRunID(3);
 	Judger->SetLanguage("C++");
 	if (Judger->Compile())
 	{
-		Judger->SetTestNum(10);
+		Judger->SetTestNum(5);
 		Judger->SetAllTestNum(allTest);
 		Judger->SetProblemNum(1006);
 		Judger->SetTimeLimit(1000);

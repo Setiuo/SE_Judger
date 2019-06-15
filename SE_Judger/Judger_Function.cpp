@@ -32,16 +32,12 @@ JudgeDate Test[110];
 
 //最多线程数
 int ThreadNum = 1;
-
 //超时重测次数
 int JudgeAgainNum = 1;
-
 //测试点数量
 int TestNum = 1;
-
 //使用语言
 static int language;
-
 //是否删除答案首末空格
 bool isRemoveBlank;
 
@@ -70,22 +66,7 @@ const char *g_runCommand[] =
 funJudger_t::funJudger_t()
 {
 	//初始化结构体数据
-	for (int i = 0; i < 100; i++)
-	{
-		testStatus[i].memoryUsed = 0;
-		testStatus[i].timeUsed = 0;
-		testStatus[i].status = 0;
-
-		Test[i].memoryLimit = 0;
-		Test[i].timeLimit = 0;
-		Test[i].runID = 0;
-		Test[i].testNum = 0;
-		Test[i].problemNum = 0;
-	}
-
-	LastStatus = 0;
-	LastTimeUsed = 0;
-	LastMemoryUsed = 0;
+	Reset();
 
 	ThreadNum = 1;
 	TestNum = 1;
@@ -119,7 +100,7 @@ bool funJudger_t::Compile()
 
 	char PutPath[PATHLEN];
 	sprintf_s(PutPath, "./log/Error_%d.log", runID);
-	HANDLE cmdError = CreateFile(PutPath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	HANDLE cmdError = CreateFile(PutPath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	char CodePath[PATHLEN];
 	sprintf_s(CodePath, g_CodePath[language], runID);
@@ -261,7 +242,7 @@ void funJudger_t::SetProblemNum(int num)
 
 void funJudger_t::SetRemoveBlank(bool Remove)
 {
-	printf("设置评测时删除数据首末空格和换行符\n");
+	printf("设置评测数据时忽略首末空格和换行符\n");
 	isRemoveBlank = Remove;
 }
 
@@ -655,28 +636,28 @@ void funJudger_t::GetResult()
 		}
 		else if (testStatus[iTestNum].status == WrongAnswer)
 		{
-			if (LastStatus == 0 || LastStatus == Accepted || LastStatus == PresentationError || LastStatus == OutputLimitExceeded)
+			if (LastStatus == Null || LastStatus == Accepted || LastStatus == PresentationError || LastStatus == OutputLimitExceeded)
 			{
 				LastStatus = WrongAnswer;
 			}
 		}
 		else if (testStatus[iTestNum].status == PresentationError)
 		{
-			if (LastStatus == 0)
+			if (LastStatus == Null)
 			{
 				LastStatus = PresentationError;
 			}
 		}
 		else if (testStatus[iTestNum].status == OutputLimitExceeded)
 		{
-			if (LastStatus == 0 || LastStatus == PresentationError)
+			if (LastStatus == Null || LastStatus == PresentationError)
 			{
 				LastStatus = OutputLimitExceeded;
 			}
 		}
 		else if (testStatus[iTestNum].status == Accepted)
 		{
-			if (LastStatus == 0)
+			if (LastStatus == Null)
 			{
 				LastStatus = Accepted;
 			}
