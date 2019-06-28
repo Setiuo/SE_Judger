@@ -10,7 +10,7 @@ int main()
 	Judger->SetNumofThread(5);
 	Judger->SetNumofTimeLimit(1);
 	Judger->SetRemoveBlank(true);
-	Judger->SetJudgeMode(Judge_All);
+	Judger->SetJudgeMode(Judge_ErrorStop);
 
 	int allTest[100];
 	for (int i = 1; i <= 10; i++)
@@ -43,6 +43,7 @@ int main()
 		Judger->SetMemoryLimit(65536);
 		Judger->Run();
 	}
+
 
 
 	Judger->Reset();

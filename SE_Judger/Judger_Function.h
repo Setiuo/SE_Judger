@@ -56,7 +56,7 @@ enum ProgramState
 
 const char ProgramStateStr[][30]
 {
-	"",
+	"Null",
 	"Wating",
 	"Pending",
 	"Compiling",

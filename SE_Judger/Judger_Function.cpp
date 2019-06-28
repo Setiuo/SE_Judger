@@ -41,6 +41,9 @@ static int language;
 //是否删除答案首末空格
 bool isRemoveBlank;
 
+//强制停止评测
+bool StopJudge = false;
+
 //代码路径
 const char *g_CodePath[] = 
 {"./temporary/%d/Code.c", 
@@ -158,6 +161,8 @@ void funJudger_t::Reset()
 {
 	for (int i = 0; i < 100; i++)
 	{
+		testStatus[i].runTime = 0;
+
 		testStatus[i].memoryUsed = 0;
 		testStatus[i].timeUsed = 0;
 		testStatus[i].status = 0;
@@ -172,6 +177,8 @@ void funJudger_t::Reset()
 	LastStatus = 0;
 	LastTimeUsed = 0;
 	LastMemoryUsed = 0;
+
+	StopJudge = false;
 }
 
 void funJudger_t::SetLanguage(const char *Name)
@@ -365,6 +372,19 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 	while (runTime <= extraTime)
 	{
+		if (StopJudge)
+		{
+			TerminateProcess(pi.hProcess, 0);
+
+			CloseHandle(si.hStdInput);
+			CloseHandle(si.hStdOutput);
+			CloseHandle(si.hStdError);
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+
+			return 0;
+		}
+
 		//程序正常结束，先设置为未超时跳出循环
 		if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0)
 		{
@@ -486,7 +506,7 @@ void funJudger_t::PrintResult()
 
 	//DeleteTestFile(runID);
 
-	printf("Judge Over, %s  usetime:%4dms  usememory:%5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
+	printf("Judge Over, %-22s  usetime:%-4dms  usememory:%-5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
 }
 
 int funJudger_t::Run()
@@ -557,6 +577,7 @@ int funJudger_t::Run()
 				{
 					printf("遇到错误，已停止评测\n");
 					EncoError = true;
+					StopJudge = true;
 
 					break;
 				}
@@ -684,7 +705,7 @@ void funJudger_t::GetResult()
 			}
 		}
 
-		printf("##%2d : %s  usetime:%4dms  runttime:%4dms  usememory:%5dkb  ExitCode:0x%x\n", iTestNum, ProgramStateStr[testStatus[iTestNum].status], testStatus[iTestNum].timeUsed, testStatus[iTestNum].runTime, testStatus[iTestNum].memoryUsed, testStatus[iTestNum].exitCode);
+		printf("##%-2d : %-22s  usetime:%-4dms  runttime:%-4dms  usememory:%-5dkb  ExitCode:0x%x\n", iTestNum, ProgramStateStr[testStatus[iTestNum].status], testStatus[iTestNum].timeUsed, testStatus[iTestNum].runTime, testStatus[iTestNum].memoryUsed, testStatus[iTestNum].exitCode);
 	}
 }
 
