@@ -205,6 +205,13 @@ void funJudger_t::SetNumofTimeLimit(int num)
 	printf("设置超时重测次数：%d\n", num);
 	JudgeAgainNum = num;
 }
+
+void funJudger_t::SetJudgeMode(int mode)
+{
+	printf("设置评测模式：%d\n", mode);
+	judgeMode = mode;
+}
+
 void funJudger_t::SetRunID(int num)
 {
 	printf("设置运行ID：%d\n", num);
@@ -373,28 +380,13 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		if (maxMemory > data->memoryLimit)
 		{
 			IsMemoryLimit = true;
+			IstimeLimit = false;
 		}
 
 		if (!IstimeLimit || IsMemoryLimit)
 		{
-			/*printf("PeakWorkingSetSize          %I64d\n", info.PeakWorkingSetSize / 1024);
-			printf("PeakPagefileUsage          %I64d\n", info.PeakPagefileUsage / 1024);
-			printf("WorkingSetSize             %I64d\n", info.WorkingSetSize / 1024);
-			printf("QuotaPeakPagedPoolUsage    %I64d\n", info.QuotaPeakPagedPoolUsage / 1024);
-			printf("QuotaNonPagedPoolUsage     %I64d\n", info.QuotaNonPagedPoolUsage / 1024);
-			printf("QuotaPagedPoolUsage        %I64d\n", info.QuotaPagedPoolUsage / 1024);
-			printf("QuotaPeakNonPagedPoolUsage %I64d\n", info.QuotaPeakNonPagedPoolUsage / 1024);
-			printf("PagefileUsage              %I64d\n", info.PagefileUsage / 1024);
-			printf("PrivateUsage               %I64d\n", info.PrivateUsage / 1024);*/
 			IsBreak = true;
 
-			if (IsMemoryLimit)
-			{
-				//超内存后设置为未超时，获取进程使用时间
-				IstimeLimit = false;
-			}
-
-			if (!IstimeLimit)
 			{
 				FILETIME creationTime, exitTime, kernelTime, userTime;
 				GetProcessTimes(pi.hProcess, &creationTime, &exitTime, &kernelTime, &userTime);
@@ -424,7 +416,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		Sleep(10);
 	}
 
-	if (!IstimeLimit && timeUsed > data->timeLimit)
+	if (timeUsed >= data->timeLimit)
 	{
 		IstimeLimit = true;
 	}
@@ -487,6 +479,16 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	return 0;
 }
 
+void funJudger_t::PrintResult()
+{
+	printf("评测完成！\n");
+	GetResult();
+
+	//DeleteTestFile(runID);
+
+	printf("Judge Over, %s  usetime:%4dms  usememory:%5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
+}
+
 int funJudger_t::Run()
 {
 	clock_t start;
@@ -514,6 +516,8 @@ int funJudger_t::Run()
 	int timeLimitJudgeAgain[100];
 	memset(timeLimitJudgeAgain, 0, sizeof timeLimitJudgeAgain);
 
+	bool EncoError = false;
+
 	while (1)
 	{
 		bool judgeOver = true;
@@ -523,7 +527,7 @@ int funJudger_t::Run()
 		{
 			int iTestNum = allTestNum[i];
 
-			if (testStatus[iTestNum].status == 0)
+			if (testStatus[iTestNum].status == Null)
 			{
 				judgeOver = false;
 				break;
@@ -533,13 +537,36 @@ int funJudger_t::Run()
 				timeLimitJudgeAgain[iTestNum]++;
 				printf("@超时重测[%d] ： 测试点%d\n", timeLimitJudgeAgain[iTestNum], iTestNum);
 
-				testStatus[iTestNum].status = 0;
+				testStatus[iTestNum].status = Null;
 				CreateTestThread(i, true);
 				judgeOver = false;
 
 				//break目的是等待该线程执行完成，去除多线程对评测的影响
 				break;
 			}
+
+			if (judgeMode == Judge_ErrorStop)
+			{
+				if (testStatus[iTestNum].status == PresentationError ||
+					testStatus[iTestNum].status == TimeLimitExceeded ||
+					testStatus[iTestNum].status == MemoryLimitExceeded ||
+					testStatus[iTestNum].status == WrongAnswer ||
+					testStatus[iTestNum].status == RuntimeError ||
+					testStatus[iTestNum].status == OutputLimitExceeded ||
+					testStatus[iTestNum].status == SystemError)
+				{
+					printf("遇到错误，已停止评测\n");
+					EncoError = true;
+
+					break;
+				}
+			}
+		}
+
+		if (EncoError)
+		{
+			PrintResult();
+			break;
 		}
 
 		if (judgeOver)
@@ -554,13 +581,7 @@ int funJudger_t::Run()
 				continue;
 			}
 
-			//printf("测试点 结果      时间            Judge时间        内存               退出码\n");
-			printf("评测完成！\n");
-			GetResult();
-
-			//DeleteTestFile(runID);
-
-			printf("Judge Over, %s  usetime:%4dms  usememory:%5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
+			PrintResult();
 			break;
 		}
 	}

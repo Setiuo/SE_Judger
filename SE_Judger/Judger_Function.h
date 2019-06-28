@@ -19,6 +19,15 @@ struct JudgeDate
 	bool resurvey;
 };
 
+//评测模式
+//Judge_ErrorStop @遇到错误即停止评测
+//Judge_All		  @全部测试点评测
+enum JudgeMode
+{
+	Judge_ErrorStop = 1,
+	Judge_All
+};
+
 enum Language
 {
 	SE_C,
@@ -78,6 +87,8 @@ private:
 	int memoryLimit;
 	//每个测试点号【数组下标对应的测试点号】
 	int *allTestNum;
+	//评测模式
+	int judgeMode;
 
 	//结果：最终评测状态
 	int LastStatus;
@@ -95,6 +106,8 @@ public:
 	void SetNumofThread(int num);
 	//设置超时重测次数
 	void SetNumofTimeLimit(int num);
+	//设置评测模式
+	void SetJudgeMode(int mode);
 
 	//设置运行ID
 	void SetRunID(int num);
@@ -120,6 +133,7 @@ public:
 
 	bool Compile();
 	int Run();
+	void PrintResult();
 private:
 	//创建评测线程
 	void CreateTestThread(int start, int end);

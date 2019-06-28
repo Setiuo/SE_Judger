@@ -10,6 +10,7 @@ int main()
 	Judger->SetNumofThread(5);
 	Judger->SetNumofTimeLimit(1);
 	Judger->SetRemoveBlank(true);
+	Judger->SetJudgeMode(Judge_All);
 
 	int allTest[100];
 	for (int i = 1; i <= 10; i++)
@@ -29,6 +30,21 @@ int main()
 		Judger->Run();
 	}
 
+
+	Judger->Reset();
+	Judger->SetRunID(5);
+	Judger->SetLanguage("Java");
+	if (Judger->Compile())
+	{
+		Judger->SetTestNum(10);
+		Judger->SetAllTestNum(allTest);
+		Judger->SetProblemNum(1000);
+		Judger->SetTimeLimit(1000);
+		Judger->SetMemoryLimit(65536);
+		Judger->Run();
+	}
+
+
 	Judger->Reset();
 	allTest[1] = 1;
 	allTest[2] = 2;
@@ -42,7 +58,7 @@ int main()
 		Judger->SetTestNum(5);
 		Judger->SetAllTestNum(allTest);
 		Judger->SetProblemNum(1006);
-		Judger->SetTimeLimit(1000);
+		Judger->SetTimeLimit(1500);
 		Judger->SetMemoryLimit(65536);
 		Judger->Run();
 	}
