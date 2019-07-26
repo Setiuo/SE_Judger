@@ -8,7 +8,7 @@
 #include <cppconn/statement.h>
 
 #include "MySql.h"
-
+#include "JudgerType.h"
 using namespace std;
 using namespace sql;
 
@@ -22,7 +22,7 @@ extern void MySQL_Connect()
 	try
 	{
 		driver = get_driver_instance();
-		con = driver->connect("tcp://127.0.0.1", "root", "SqlPassWord");
+		con = driver->connect("tcp://127.0.0.1", "root", "ieIAjVBw02");
 		con->setSchema("openjudge");
 
 		stmt = con->createStatement();
@@ -159,10 +159,10 @@ extern void MySQL_ChangeStatus(int RunID, const int Status)
 	{
 		static char cmd[100];
 #ifndef JUDGE_CONTEST
-		sprintf_s(cmd, "update oj_status set status=%d where RunID=%d", Status, RunID);
+		sprintf_s(cmd, "update oj_status set status=%d where RunID=%d", Status - 1, RunID);
 #endif
 #ifdef JUDGE_CONTEST
-		sprintf_s(cmd, "update oj_constatus set status=%d where RunID=%d", Status, RunID);
+		sprintf_s(cmd, "update oj_constatus set status=%d where RunID=%d", Status - 1, RunID);
 #endif
 		res = stmt->executeQuery(cmd);
 	}
@@ -257,7 +257,7 @@ extern void MySQL_SetUseTime(int RunID, int UseTime)
 			cout << " (MySQL error code: " << e.getErrorCode();
 			cout << " , SQLState: " << e.getSQLState() << " )" << endl;
 		}
-		
+
 	}
 }
 

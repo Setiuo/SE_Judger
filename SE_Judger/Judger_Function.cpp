@@ -9,10 +9,13 @@
 #include <algorithm>
 #include <string>
 #include <fstream>
+#include <regex>
 
 #include "Judger_Function.h"
+#include "JudgerType.h"
 #include "Encode.h"
 
+#include <MySql.h>
 using namespace std;
 
 //每个测试点的评测状态信息
@@ -46,24 +49,24 @@ bool StopJudge = false;
 
 //代码路径
 const char *g_CodePath[] = 
-{"./temporary/%d/Code.c", 
- "./temporary/%d/Code.cpp",
- "./temporary/%d/Main.java"
+{"./test/%d/Code.c", 
+ "./test/%d/Code.cpp"
 };
 
 //编译命令
 const char *g_cplCommand[] =
-{ "\"gcc\" \"%s\" -o \"./temporary/%d/Test.exe\" -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE",
-  "\"g++\" \"%s\" -o \"./temporary/%d/Test.exe\" -O2 -Wall -lm --static -DONLINE_JUDGE",
-  "\"javac\" -J-Xms32m -J-Xmx256m \"./temporary/%d/Main.java\""
+{ "\"gcc\" \"%s\" -o \"./test/%d/Test.exe\" -O2 -Wall -lm --static -std=c99 -DONLINE_JUDGE",
+  "\"g++\" \"%s\" -o \"./test/%d/Test.exe\" -O2 -Wall -lm --static -DONLINE_JUDGE",
+  "\"javac\" -J-Xms32m -J-Xmx256m \"./test/%d/Main.java\"",
+  "\"python\" -m py_compile \"./test/%d/Code.py\""
 };
 
 //运行命令
 const char *g_runCommand[] =
-{ "./temporary/%d/Test.exe",
-  "./temporary/%d/Test.exe",
-  "\"java\" -cp \"./temporary/%d\" \"Main\"",
-  "\"python\" \"./temporary/%d/Code.py\""
+{ "./test/%d/Test.exe",
+  "./test/%d/Test.exe",
+  "\"java\" -cp \"./test/%d\" \"Main\"",
+  "\"python\" \"./test/%d/Code.py\""
 };
 
 funJudger_t::funJudger_t()
@@ -86,10 +89,93 @@ funJudger_t::~funJudger_t()
 
 }
 
+bool funJudger_t::CheckCode()
+{
+	if (language != SE_C && language != SE_CPlusPlus)
+		return true;
+
+	char CodePath[100];
+	if (language == SE_Java)
+	{
+		sprintf_s(CodePath, "test\\%d\\Main.java", runID);
+	}
+	else if (language == SE_Python)
+	{
+		sprintf_s(CodePath, "test\\%d\\Code.py", runID);
+	}
+	else if (language == SE_C)
+	{
+		sprintf_s(CodePath, "test\\%d\\Code.c", runID);
+	}
+	else
+	{
+		sprintf_s(CodePath, "test\\%d\\Code.cpp", runID);
+	}
+
+	ifstream infile;
+	infile.open(CodePath);
+	string Str;
+
+	const string SensitiveStr[] = { ".*windows.*", ".*system.*", ".*ExitWindowsEx.*", ".*fopen.*", ".*ifstream.*", 
+		".*WinExec.*", ".*ShellExecute.*", ".*ShellExecuteEx.*", ".*CreateProcess.*", ".*thread.*", 
+		".*OpenProcess.*", ".*CloseHandle.*", ".*remove.*", ".*DeleteFile.*", ".*CreateDirectory.*",
+		".*__stdcall.*", ".*GetProcAddress.*", ".*LoadLibrary.*", ".*RemoveDirectory.*"};
+
+	int SensitiveStrNum = sizeof(SensitiveStr) / sizeof(SensitiveStr[0]);
+
+	bool Find = false;
+
+	while (getline(infile, Str))
+	{
+		
+		for (int i = 0; i < SensitiveStrNum; i++)
+		{
+			regex reg(SensitiveStr[i], regex_constants::icase);
+			bool bValid = regex_match(Str, reg);
+
+			if (bValid)
+			{
+				printf("检测到关键字，已停止编译\n");
+				Find = true;
+
+				sprintf_s(CodePath, "Temporary_Error\\%d.log", runID);
+				ofstream out(CodePath);
+				if (out.is_open())
+				{
+					string iSensitiveStr = SensitiveStr[i];
+
+					string noWord = ".*";
+					size_t pos = iSensitiveStr.find(noWord);
+					while (pos != -1)
+					{
+						iSensitiveStr.replace(pos, noWord.length(), "");
+						pos = iSensitiveStr.find(noWord);
+					}
+
+					out << UnicodeToANSI(L"检测到敏感词: ") << iSensitiveStr.c_str() << endl;
+					out << UnicodeToANSI(L"编译已终止，请删去敏感词再进行操作.");
+					out.close();
+				}
+
+				break;
+			}
+		}
+
+		if (Find)
+			break;
+	}
+
+	return !Find;
+}
+
 bool funJudger_t::Compile()
 {
-	if (language == SE_Python)
-		return true;
+	if (!CheckCode())
+	{
+		return false;
+	}
+
+	MySQL_ChangeStatus(runID, Compiling);
 
 	bool status = false;
 
@@ -102,7 +188,7 @@ bool funJudger_t::Compile()
 	sa.bInheritHandle = TRUE;
 
 	char PutPath[PATHLEN];
-	sprintf_s(PutPath, "./log/Error_%d.log", runID);
+	sprintf_s(PutPath, "./Temporary_Error/%d.log", runID);
 	HANDLE cmdError = CreateFile(PutPath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	char CodePath[PATHLEN];
@@ -110,7 +196,7 @@ bool funJudger_t::Compile()
 
 	//执行的编译命令
 	char command[PATHLEN];
-	if(language == SE_Java)
+	if(language == SE_Java || language == SE_Python)
 		sprintf_s(command, g_cplCommand[language], runID);
 	else
 		sprintf_s(command, g_cplCommand[language], CodePath, runID);
@@ -127,14 +213,14 @@ bool funJudger_t::Compile()
 	if (CreateProcess(NULL, command, NULL, NULL, TRUE, NULL, NULL, NULL, &si, &pi))
 	{
 		printf("编译中...\n");
-		WaitForSingleObject(pi.hProcess, INFINITE);
+		WaitForSingleObject(pi.hProcess, 60000);
 
 		GetExitCodeProcess(pi.hProcess, &exitcode);
 
 		if (exitcode != 0)
 		{
 			status = false;
-			printf("编译发生错误\n");
+			printf("编译发生错误，退出码：%x\n", exitcode);
 			PrintErrorLog(runID);
 		}
 		else
@@ -155,6 +241,11 @@ bool funJudger_t::Compile()
 	CloseHandle(pi.hThread);
 
 	return status;
+}
+
+void funJudger_t::JudgerStop()
+{
+	StopJudge = true;
 }
 
 void funJudger_t::Reset()
@@ -280,15 +371,72 @@ void funJudger_t::PrintErrorLog(int RunID)
 	is.close();
 }
 
-void funJudger_t::DeleteTestFile(int RunID)
+void funJudger_t::CreateDir(int RunID)
+{
+	char Path[100];
+	sprintf_s(Path, "test/%d", RunID);
+
+	CreateDirectory(Path, NULL);
+}
+
+bool RemoveDir(const char* szFileDir)
+{
+	std::string strDir = szFileDir;
+
+	if (strDir.at(strDir.length() - 1) != '\\')
+		strDir += '\\';
+
+	WIN32_FIND_DATA wfd;
+	HANDLE hFind = FindFirstFile((strDir + "*.*").c_str(), &wfd);
+
+	if (hFind == INVALID_HANDLE_VALUE)
+		return false;
+
+	do
+	{
+		if (wfd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+		{
+			if (_stricmp(wfd.cFileName, ".") != 0 &&
+				_stricmp(wfd.cFileName, "..") != 0)
+				RemoveDir((strDir + wfd.cFileName).c_str());
+		}
+		else
+		{
+			bool Succeess = false;
+			do
+			{
+				Succeess = DeleteFile((strDir + wfd.cFileName).c_str());
+
+				if (!Succeess)
+				{
+					printf("文件被占用，正在尝试删除...\n");
+					Sleep(10);
+				}
+			} while (!Succeess);
+		}
+	} while (FindNextFile(hFind, &wfd));
+
+	FindClose(hFind);
+	RemoveDirectory(szFileDir);
+
+	return true;
+}
+
+void funJudger_t::DeleteTestFile()
 {
 	char Path[PATHLEN];
+	sprintf_s(Path, "test/%d", runID);
+
+	RemoveDir(Path);
+	//RemoveDirectory("test");
+	/*
+	char Path[PATHLEN];
 	//删除目录下所有文件
-	sprintf_s(Path, "del /s /q \"temporary\\%d\\*.out\" >log\\Remove_%d.log", RunID, RunID);
+	sprintf_s(Path, "del /s /q \"test\\%d\\*.*\" >log\\Remove_%d.log", RunID, RunID);
 	system(Path);
 	//删除文件夹
-	//sprintf_s(Path, "rd \"test\\%d\"", RunID);
-	//system(Path);
+	sprintf_s(Path, "rd \"test\\%d\"", RunID);
+	system(Path);*/
 }
 
 DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
@@ -301,10 +449,10 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	sprintf_s(InputPath, "./data/%d/%d_%d.in", data->problemNum, data->problemNum, data->testNum);
 
 	char OutputPath[PATHLEN];
-	sprintf_s(OutputPath, "./temporary/%d/Test_%d.out", data->runID, data->testNum);
+	sprintf_s(OutputPath, "./test/%d/Test_%d.out", data->runID, data->testNum);
 
 	char ErrorPath[PATHLEN];
-	sprintf_s(ErrorPath, "./log/Error_%d.log", data->runID);
+	sprintf_s(ErrorPath, "./Temporary_Error/Error_%d.log", data->runID);
 
 	char ProgramPath[PATHLEN];
 	sprintf_s(ProgramPath, g_runCommand[language], data->runID);
@@ -323,9 +471,6 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	si.hStdInput =	CreateFile((LPCSTR)InputPath,	GENERIC_READ,  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, OPEN_ALWAYS,   FILE_ATTRIBUTE_NORMAL, NULL);
 	si.hStdOutput = CreateFile((LPCSTR)OutputPath,	GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	si.hStdError =	CreateFile((LPCSTR)ErrorPath,	GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	
-	//DWORD createFlag = CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB;
-	//DWORD createFlag = HIGH_PRIORITY_CLASS | CREATE_NO_WINDOW;
 
 	if (!CreateProcess(NULL, ProgramPath, NULL, &sa, TRUE, HIGH_PRIORITY_CLASS | CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
 	{
@@ -347,7 +492,13 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 
 	GetProcessMemoryInfo(pi.hProcess, (PROCESS_MEMORY_COUNTERS*)&info, sizeof(info));
 
-	int maxMemory = (int)max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
+	int maxMemory;// = (int)max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
+
+	if (language == SE_Java)
+		maxMemory = (int)info.PeakWorkingSetSize / 1024;
+	else
+		maxMemory = (int)info.PeakPagefileUsage / 1024;
+
 	bool IstimeLimit = true;
 
 	if (maxMemory > data->memoryLimit)
@@ -368,7 +519,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + data->timeLimit;
 
 	if(data->resurvey)
-		extraTime += data->timeLimit * ThreadNum;
+		extraTime += (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum));
 
 	while (runTime <= extraTime)
 	{
@@ -395,7 +546,13 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		runTime = (int)(stop - start);
 
 		GetProcessMemoryInfo(pi.hProcess, (PROCESS_MEMORY_COUNTERS*)&info, sizeof(info));
-		maxMemory = (int)max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
+
+		if (language == SE_Java)
+			maxMemory = (int)info.PeakWorkingSetSize / 1024;
+		else
+			maxMemory = (int)info.PeakPagefileUsage / 1024;
+
+		//maxMemory = (int)max(info.PrivateUsage, info.PeakWorkingSetSize) / 1024;
 
 		if (maxMemory > data->memoryLimit)
 		{
@@ -436,7 +593,21 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		Sleep(10);
 	}
 
-	if (timeUsed >= data->timeLimit)
+	//如果是超出最大限制时间自动走出循环了就获取运行时间
+	if (IstimeLimit)
+	{
+		FILETIME creationTime, exitTime, kernelTime, userTime;
+		GetProcessTimes(pi.hProcess, &creationTime, &exitTime, &kernelTime, &userTime);
+
+		SYSTEMTIME realTime;
+		FileTimeToSystemTime(&userTime, &realTime);
+
+		timeUsed = realTime.wMilliseconds
+			+ realTime.wSecond * 1000
+			+ realTime.wMinute * 60 * 1000
+			+ realTime.wHour * 60 * 60 * 1000;
+	}//如果是程序在规定时间内运行完毕了就判断获取的运行时间是否超时
+	else if (timeUsed >= data->timeLimit)
 	{
 		IstimeLimit = true;
 	}
@@ -492,7 +663,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	}
 
 	testStatus[data->testNum].runTime = runTime;
-	testStatus[data->testNum].timeUsed = IstimeLimit ? data->timeLimit : timeUsed;
+	testStatus[data->testNum].timeUsed = timeUsed;
 	testStatus[data->testNum].memoryUsed = maxMemory;
 	testStatus[data->testNum].exitCode = exitCode;
 
@@ -504,7 +675,9 @@ void funJudger_t::PrintResult()
 	printf("评测完成！\n");
 	GetResult();
 
-	//DeleteTestFile(runID);
+	MySQL_ChangeStatus(runID, LastStatus);
+	MySQL_SetUseTime(runID, LastTimeUsed);
+	MySQL_SetUseMemory(runID, LastMemoryUsed);
 
 	printf("Judge Over, %-22s  usetime:%-4dms  usememory:%-5dkb\n", ProgramStateStr[LastStatus], LastTimeUsed, LastMemoryUsed);
 }
@@ -602,6 +775,7 @@ int funJudger_t::Run()
 				continue;
 			}
 
+
 			PrintResult();
 			break;
 		}
@@ -609,6 +783,7 @@ int funJudger_t::Run()
 
 	proTimeUsed = (int)(clock() - start);
 	printf("评测总耗时：%dms\n\n", proTimeUsed);
+
 	return 1;
 }
 
@@ -651,6 +826,9 @@ void funJudger_t::GetResult()
 	//6.Output Limit Exceeded
 	//7.Presentation Error
 	//8.Accepted
+
+	char AllStatus[1000] = "";
+
 	for (int i = 1; i <= TestNum; i++)
 	{
 		int iTestNum = allTestNum[i];
@@ -685,14 +863,14 @@ void funJudger_t::GetResult()
 		}
 		else if (testStatus[iTestNum].status == PresentationError)
 		{
-			if (LastStatus == Null)
+			if (LastStatus == Null || LastStatus == Accepted)
 			{
 				LastStatus = PresentationError;
 			}
 		}
 		else if (testStatus[iTestNum].status == OutputLimitExceeded)
 		{
-			if (LastStatus == Null || LastStatus == PresentationError)
+			if (LastStatus == Null || LastStatus == PresentationError || LastStatus == Accepted)
 			{
 				LastStatus = OutputLimitExceeded;
 			}
@@ -705,7 +883,21 @@ void funJudger_t::GetResult()
 			}
 		}
 
-		printf("##%-2d : %-22s  usetime:%-4dms  runttime:%-4dms  usememory:%-5dkb  ExitCode:0x%x\n", iTestNum, ProgramStateStr[testStatus[iTestNum].status], testStatus[iTestNum].timeUsed, testStatus[iTestNum].runTime, testStatus[iTestNum].memoryUsed, testStatus[iTestNum].exitCode);
+		char iStatusStr[100];
+		sprintf_s(iStatusStr, "%d&%d&%d&%d&0x%x|", iTestNum, testStatus[iTestNum].status - 1, testStatus[iTestNum].timeUsed, testStatus[iTestNum].memoryUsed, testStatus[iTestNum].exitCode);
+		strcat_s(AllStatus, iStatusStr);
+
+		printf("##%-3d: %-22s  usetime:%-4dms  runttime:%-4dms  usememory:%-5dkb  ExitCode:0x%x\n", iTestNum, ProgramStateStr[testStatus[iTestNum].status], testStatus[iTestNum].timeUsed, testStatus[iTestNum].runTime, testStatus[iTestNum].memoryUsed, testStatus[iTestNum].exitCode);
+	}
+
+	if (LastStatus != CompileError && LastStatus != SystemError)
+	{
+		int Strlen = (int)strnlen_s(AllStatus, 1000);
+
+		if (Strlen >= 1)
+			AllStatus[Strlen - 1] = '\0';
+
+		MySQL_SetAllStatus(runID, AllStatus);
 	}
 }
 

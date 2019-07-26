@@ -131,6 +131,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Encode.h" />
+    <ClInclude Include="JudgerType.h" />
     <ClInclude Include="Judger_Function.h" />
     <ClInclude Include="MySql.h" />
   </ItemGroup>

@@ -128,11 +128,21 @@ public:
 	//重置评测结果
 	void Reset();
 
-	//删除测试输出数据
-	void DeleteTestFile(int RunID);
+	//强制停止测评
+	void JudgerStop();
 
+	//删除测试临时输出数据
+	void DeleteTestFile();
+	//创建临时文件夹
+	void CreateDir(int RunID);
+
+	//检查代码关键字
+	bool CheckCode();
+	//编译源代码
 	bool Compile();
+	//开始评测
 	int Run();
+	//输出结果
 	void PrintResult();
 private:
 	//创建评测线程
