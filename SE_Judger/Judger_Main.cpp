@@ -59,7 +59,7 @@ int main()
 		Judger->SetTestNum(5);
 		Judger->SetAllTestNum(allTest);
 		Judger->SetProblemNum(1006);
-		Judger->SetTimeLimit(1500);
+		Judger->SetTimeLimit(1000);
 		Judger->SetMemoryLimit(65536);
 		Judger->Run();
 	}

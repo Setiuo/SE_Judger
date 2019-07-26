@@ -368,7 +368,7 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 	int extraTime = (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum)) + data->timeLimit;
 
 	if(data->resurvey)
-		extraTime += data->timeLimit * ThreadNum;
+		extraTime += (int)ceil(max(2000, data->timeLimit * 2) * (0.1 * ThreadNum));
 
 	while (runTime <= extraTime)
 	{
@@ -436,7 +436,21 @@ DWORD WINAPI funJudger_t::JudgeTest(LPVOID lpParamter)
 		Sleep(10);
 	}
 
-	if (timeUsed >= data->timeLimit)
+	//如果是超出最大限制时间自动走出循环了就获取运行时间
+	if (IstimeLimit)
+	{
+		FILETIME creationTime, exitTime, kernelTime, userTime;
+		GetProcessTimes(pi.hProcess, &creationTime, &exitTime, &kernelTime, &userTime);
+
+		SYSTEMTIME realTime;
+		FileTimeToSystemTime(&userTime, &realTime);
+
+		timeUsed = realTime.wMilliseconds
+			+ realTime.wSecond * 1000
+			+ realTime.wMinute * 60 * 1000
+			+ realTime.wHour * 60 * 60 * 1000;
+	}//如果是程序在规定时间内运行完毕了就判断获取的运行时间是否超时
+	else if (timeUsed >= data->timeLimit)
 	{
 		IstimeLimit = true;
 	}
@@ -685,14 +699,14 @@ void funJudger_t::GetResult()
 		}
 		else if (testStatus[iTestNum].status == PresentationError)
 		{
-			if (LastStatus == Null)
+			if (LastStatus == Null || LastStatus == Accepted)
 			{
 				LastStatus = PresentationError;
 			}
 		}
 		else if (testStatus[iTestNum].status == OutputLimitExceeded)
 		{
-			if (LastStatus == Null || LastStatus == PresentationError)
+			if (LastStatus == Null || LastStatus == PresentationError || LastStatus == Accepted)
 			{
 				LastStatus = OutputLimitExceeded;
 			}
